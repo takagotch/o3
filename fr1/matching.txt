@@ -1,0 +1,155 @@
+vi Gemfile
+gem 'bootstrap-sass'
+gem 'jquery-rails'
+vi application.js
+//= require jquery-rails
+//= require bootstrap-sprockets
+vi application.scss
+@import "bootstrap-sprockets";
+@import "bootstrap";
+vi Gemfile
+gem 'devise'
+vi cmd.sh
+bundle install --path vendor/bundle
+rails g devise:install
+rails g devise:views
+rails g devise user
+rails g model relationship
+vi db/migrate/XXX_create_relationships.rb
+class CreateRelation < ActiveRecord::Migration[5.1]
+  def change
+    create_table :relationships do |t|
+	  t.integer :follower_id
+	  t.integer :follower_id
+	  t.timestamps
+	end
+  end
+  add_index :relationships, :follower_id
+  add_index :relationships, :following_id
+  add_index :relationships, [:follower_id, :following_id], unique: true
+end
+vi user.rb
+has_many :active_relationships, class_name: "Relationship", foreign_key: "follower_id", dependent: destroy
+has_many :following, through: :active_relationships
+vi relationship.rb
+belong_to :following, class_name: "User"
+vi users_controller.rb
+class UsersController < ApplicationController
+  def show
+    @user = User.find(params[:id])
+    @relationship = Relationship.new
+  end
+end
+vi show.html.haml-users
+.text-center
+  = image_tag @user.avatar, class: "avatar"
+.text-center#user-description
+  = @user.nickname
+  - if user_signed_in?
+    #follow_form
+	  - if current_user.following?(@user)
+	    #liked.btn.btn-default Liked
+	  - else
+	    = render 'follow',{relationship: @relationship}
+  %br= @user.profile
+vi User.rb
+def following?(other_user)
+  following.include?(other_user)
+end
+vi _follow.html.haml-users
+= form_with model: relatinship, remote: true do |f|
+  %div= hidden_field_tag :following_id, @user.id
+  = f.submit "Liked", class: "btn-primary"
+vi relationships_controller
+class RelationshipController < ApplicationController
+  def create_table
+    current_user.active_relationships.create(create_params)
+  end
+  private
+  def create_params
+    params.permit(:following_id)
+  end
+end
+vi create.js.erb
+$("#follow_form").html(`<div class="btn btn-default">Liked</div>`)
+vi User.rb
+has_many :passive_relationships, class_name: "Relationship", foreign_key: "following_id", dependent: :destroy
+vi User.rb
+def matchers
+  follower_ids = passive_relationships.pluck(:follower_id)
+  active_relationships.eager_load(:following)
+  .select{|r|follower_ids.include? r.following_id}
+  .map{|r|r.following}
+end
+vi user.rb
+has_many :followers, through: :passive_relationships, source: :follower
+vi relatinship.rb
+belongs_to :follower, class_name: "User"
+vi user.rb
+def matchers
+  following & followers
+end
+def matchers
+  User.where(id: passive_relationships.select(follower_id:))
+  .where(id: active_relationships.select(:following_id))
+end
+vi user.rb
+User.matching(current_user)
+scope :matching, -> user_id{ joins("INNER JOIN relationships ON relationships.follower_id = users.id
+  INNER JOIN relationships AS r ON relatinships.following_id = r.follower_id AND r.following_id relationships.follower_id").where('relationships.following_id ?', user_id) }
+vi user.rb
+def index
+  @users = current_user.matchers
+end
+vi index.html.haml
+= render 'partial/navbar'
+.container
+  .col-md-3
+    = render 'partial/verticalnavbar'
+  .col-md-9
+    .panel.panel-default
+	  .panel-heading
+	    .text-center
+		  %span{style: "font-size:18px;"}UserList
+		- @users.each do |user|
+		  .col-sm-4.col-md-3
+		    .panel.panel-default
+			  .panel-heading
+			    %h1.panel-title= link_to "#{user.email}", user_path(user)
+			  .panel-body
+			  .thumbnail
+			    = image_tag(user.avatar)
+			  .panel-footer
+vi relationships_controller.rb
+User.find(params["following_id"]).following?(current_user)
+vi .html.haml
+= form_with model: current_user.active_relationships.build, class: 'like_form' do |f|
+  %div = hidden_field_tag :following_id, @user.id
+  = f.submit "Liked", class: "btn btn-primary"
+vi .js
+$(".like_form").on("submit",function(3){
+  e.preventDefault();
+  var formData = new FormData(this);
+  var url = $(this).attr('action');
+  $.ajax({
+    url: url,
+	type: "POST",
+	data: formData,
+	dataType: 'json',
+	processData: false,
+	contentType: false
+  })
+  .done(function(data){
+  });
+});
+vi .rb
+following_user = User.find(params["following_id"])
+@matching = following_usr.following?(current_user)
+vi create.json.jbuilder
+json.set! :matching, @matching
+/*http://mojs.io/*/
+
+
+
+
+
