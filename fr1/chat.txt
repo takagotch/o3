@@ -1,0 +1,140 @@
+rails new frchat
+cd frchat
+railss g controller rooms show
+vi conig/routes.rb
+Rails.application.routes.draw do
+  root to: 'rooms#show'
+end
+rails g message content:text name:string
+rails db:migrate
+vi app/controller/rooms_controller.rb
+class RoomsController < ApplicationController
+  def show
+    @messages = Message.all
+  end
+end
+vi app/views/rooms/show.html.erb
+<h1></h1>
+<div id="message">
+  <%= render @messages %>
+</div>
+vi app/views/messages/_message.html.erb
+<div class="message">
+  <p>
+    <%= "#{message.name} : #{message.content}(#{message.created_at.strftime('%Y/%m/%d %H:%M:%S')})" %>
+  </p>	
+</div>
+rails console
+Message.create! content: 'Hello', name: 'tky'
+Message.create! content: 'HELLO', name: 'TKY'
+quit
+rails server
+rails g channel room speak
+vi app/assets/javascripts/channels/room.coffee
+App.room = App.cable.subscriptions.create "RoomChannel",
+  connected: ->
+  disconnected: ->
+  received: (data) ->
+  speak: (name, content) ->
+    @perform 'speak', {name: name, content: content}
+vi app/channels/room_channel.rb
+class RoomChannel < ApplicationCable::Channel
+  def subscribed
+    stream_from "room_channel"
+  end
+  def unsubscribed
+  end
+  def speak(message)
+    Message.create!(name: message['name'], content message['content'])
+  end
+end
+vi Gemfile
+gem 'jquery-rails'
+bundle install
+vi app/assets/javascripts/applicatin.js
+//= require jquery-rails
+//= requrie rails-ujs
+//= require activestorage
+//= require turbolinks
+//= require_tree .
+vi app/views/rooms/show.html.erb
+<h1>fr chat</h1>
+<form>
+  <label>NAME</label>
+  <input type="text" class="js-name" value="noname">
+  <br>
+  <label>CONTENT</label>
+  <input type="text" class="js-content" data-behavior="room_speaker">
+</form>
+<div id="message">
+  <%= render @messages %>
+</div>
+vi app/assets/javascripts/channels/room.coffee
+App.room = App.cabel.subscriptions.create "RoomChannel",
+  connected: ->
+  disconnected: ->
+  received: (data) ->
+    $('#messages').prepend data['message']
+  speak: (name, content) ->
+    @perform 'speak', {name: name, content: content}
+$(document).on 'keypress', '[data-behavior~=room_speaker]', (event) ->
+  if event.keyCode is 13 #return = send
+    App.room.speak($('.js-name').val(), $('.js-content').val())
+	event.target.value = ''
+	event.preventDefault()
+vi app/controllers/rooms_controller.rb
+class RoomsController < ApplicationController
+  def show
+    @message = Message.all.order(created_at: :desc).limit(10)
+  end
+end
+vi app/models/message.rb
+class Message < ApplicationRecord
+  after_create_commit { MessagebroadcastJob.perform_later self } 
+end
+rails g job Messagebroadcast
+vi app/jobs/message_broadcast_job.rb
+class MessageBroadcastJob < ApplicationJob
+  queue_as :default
+  def perform(message)
+    ActionCable.server.broadcast 'room_channel', message: render_message(message)
+  end
+  private
+  def render_message(message)
+    AppliacitonController.renderer.render(partial: 'messages/message', local: { messsage: message } )
+  end
+end
+rails server
+vi Gemfile
+gim 'chromdriver-helper'
+group :development, :test do
+  gem 'byebug', platforfms: [:mri, :mingw, :x64_mingw]
+  gem 'sqlite3'
+end
+group :production do
+  gem 'pg'
+end
+bundle install --without production
+rails db:migrate:reset
+git add .
+git commit -m "heroku"
+git push 
+heroku login
+heloku create frchat
+git push heroku master
+heroku run rails db:migrate
+vi config/environment/production.rb
+config.action_cabel.allowed_request_origins = [ /http:\/\/.*/ ]
+vi config/cabel.yml
+production:
+  #adapter: redis
+  #url: redis://localhost:6379/1
+  #channel_prefix: ac_test_production
+  adapter: async
+
+  
+  
+  
+
+
+
